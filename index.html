@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>모닝콜</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f6f7; --card:#fff; --text:#1c1c1e; --sub:#8e8e93; --accent:#0a84ff; --line:#e5e5ea; --red:#ff3b30; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#000; --card:#1c1c1e; --text:#f2f2f7; --sub:#8e8e93; --line:#2c2c2e; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif; background:var(--bg); color:var(--text); padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom); }
+  main { max-width:520px; margin:0 auto; padding:16px 0 40px; }
+  h1 { font-size:24px; margin:8px 0 16px; }
+  h2 { font-size:15px; color:var(--sub); margin:20px 4px 8px; font-weight:600; }
+  .card { background:var(--card); border-radius:14px; padding:4px 0; overflow:hidden; }
+  .row { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-top:1px solid var(--line); gap:8px; }
+  .row:first-child { border-top:none; }
+  .day { font-weight:600; width:32px; }
+  .day.sun { color:var(--red); }
+  .day.sat { color:var(--accent); }
+  input[type=time] { font-size:17px; border:none; background:transparent; color:var(--text); }
+  input[type=date], input[type=text] { font-size:16px; padding:8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); width:100%; }
+  .off { font-size:14px; color:var(--sub); }
+  .switch { position:relative; width:46px; height:28px; flex-shrink:0; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slider { position:absolute; inset:0; background:#888; border-radius:28px; transition:.2s; cursor:pointer; }
+  .slider:before { content:""; position:absolute; height:22px; width:22px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+  .switch input:checked + .slider { background:#34c759; }
+  .switch input:checked + .slider:before { transform:translateX(18px); }
+  .tabs { display:flex; background:var(--line); border-radius:9px; padding:2px; margin:12px 16px; }
+  .tabs button { flex:1; border:none; background:transparent; padding:8px; border-radius:7px; font-size:15px; color:var(--text); cursor:pointer; }
+  .tabs button.on { background:var(--card); font-weight:600; }
+  .form { padding:12px 16px 16px; display:grid; gap:8px; }
+  .range { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .btn { background:var(--accent); color:#fff; border:none; border-radius:10px; padding:12px; font-size:16px; font-weight:600; cursor:pointer; }
+  .btn.ghost { background:transparent; color:var(--red); border:1px solid var(--line); }
+  .item { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-top:1px solid var(--line); gap:8px; }
+  .item:first-child { border-top:none; }
+  .item small { color:var(--sub); display:block; margin-top:2px; }
+  .del { background:none; border:none; color:var(--red); font-size:14px; cursor:pointer; padding:6px; }
+  .empty { padding:16px; color:var(--sub); font-size:14px; }
+  .prev { padding:4px 0; }
+  .pv { display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-top:1px solid var(--line); font-size:15px; }
+  .pv:first-child { border-top:none; }
+  .pv .ring { color:#34c759; font-weight:600; }
+  .pv .skip { color:var(--sub); }
+  .tag { font-size:12px; padding:2px 7px; border-radius:6px; background:var(--line); color:var(--sub); margin-left:6px; }
+  .note { font-size:13px; color:var(--sub); margin:8px 4px; line-height:1.5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>모닝콜</h1>
+
+  <h2>요일별 알람</h2>
+  <div class="card" id="weekCard"></div>
+
+  <h2>쉬는 날 (연차·기타)</h2>
+  <div class="card">
+    <div class="tabs">
+      <button id="tabSingle" class="on" onclick="setMode('single')">단일 날짜</button>
+      <button id="tabRange" onclick="setMode('range')">기간</button>
+    </div>
+    <div class="form" id="formSingle">
+      <input type="date" id="singleDate">
+      <input type="text" id="singleLabel" placeholder="메모 (예: 반차, 병원)">
+      <button class="btn" onclick="addSingle()">추가</button>
+    </div>
+    <div class="form" id="formRange" style="display:none">
+      <div class="range">
+        <input type="date" id="rangeStart">
+        <input type="date" id="rangeEnd">
+      </div>
+      <input type="text" id="rangeLabel" placeholder="이름 (예: 여름 연차)">
+      <button class="btn" onclick="addRange()">기간 추가</button>
+    </div>
+    <div id="offList"></div>
+  </div>
+
+  <h2>공휴일 (대체공휴일 포함)</h2>
+  <div class="card">
+    <div class="form">
+      <input type="date" id="holDate">
+      <input type="text" id="holName" placeholder="이름 (예: 대체공휴일)">
+      <button class="btn" onclick="addHoliday()">공휴일 추가</button>
+    </div>
+    <div class="note">공휴일은 직접 추가·삭제합니다. 한국천문연구원 특일 정보를 보고 연 1회 입력해 주세요.</div>
+    <div id="holList"></div>
+  </div>
+
+  <h2>다음 30일 미리보기</h2>
+  <div class="card prev" id="preview"></div>
+  <div class="note">울리는 날은 시간이 표시되고, 제외된 날은 사유가 표시됩니다.</div>
+</main>
+
+<script>
+const KEY = "morningcall-v1";
+const DAYS = ["sun","mon","tue","wed","thu","fri","sat"];
+const DAY_KO = {sun:"일",mon:"월",tue:"화",wed:"수",thu:"목",fri:"금",sat:"토"};
+
+let state = load();
+
+function defaultState() {
+  return {
+    week: { mon:"07:00", tue:"07:00", wed:"07:00", thu:"07:00", fri:"07:30", sat:null, sun:null },
+    offs: [],      // {id, start, end, label}  (단일 날짜는 start=end)
+    holidays: []   // {date, name}
+  };
+}
+function load() {
+  try { return Object.assign(defaultState(), JSON.parse(localStorage.getItem(KEY)) || {}); }
+  catch { return defaultState(); }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+}
+
+// YYYY-MM-DD <-> Date (로컬 기준)
+function toStr(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function parse(s) { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); }
+
+// 날짜 하나에 대해 울림 여부 판단 (우선순위: 요일 설정 → 개인 일정 → 공휴일)
+function judge(dateStr) {
+  const dow = DAYS[parse(dateStr).getDay()];
+  if (!state.week[dow]) return { ring:false, reason:"요일 설정 꺼짐" };
+  const off = state.offs.find(o => dateStr >= o.start && dateStr <= o.end);
+  if (off) return { ring:false, reason: off.label || "개인 일정" };
+  const hol = state.holidays.find(h => h.date === dateStr);
+  if (hol) return { ring:false, reason: hol.name || "공휴일" };
+  return { ring:true, time: state.week[dow] };
+}
+
+function renderWeek() {
+  const el = document.getElementById("weekCard");
+  el.innerHTML = DAYS.map((d,i) => {
+    const on = !!state.week[d];
+    const cls = d==="sun" ? "sun" : d==="sat" ? "sat" : "";
+    return `<div class="row">
+      <span class="day ${cls}">${DAY_KO[d]}</span>
+      <input type="time" value="${on ? state.week[d] : "07:00"}" ${on ? "" : "disabled"}
+        onchange="setTime('${d}', this.value)">
+      <label class="switch">
+        <input type="checkbox" ${on ? "checked" : ""} onchange="toggleDay('${d}', this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>`;
+  }).join("");
+}
+function setTime(d, v) { state.week[d] = v || null; save(); renderAll(); }
+function toggleDay(d, on) { state.week[d] = on ? (state.week[d] || "07:00") : null; save(); renderAll(); }
+
+let mode = "single";
+function setMode(m) {
+  mode = m;
+  document.getElementById("tabSingle").classList.toggle("on", m==="single");
+  document.getElementById("tabRange").classList.toggle("on", m==="range");
+  document.getElementById("formSingle").style.display = m==="single" ? "grid" : "none";
+  document.getElementById("formRange").style.display = m==="range" ? "grid" : "none";
+}
+
+function addSingle() {
+  const date = document.getElementById("singleDate").value;
+  if (!date) return alert("날짜를 선택해 주세요.");
+  const label = document.getElementById("singleLabel").value.trim();
+  state.offs.push({ id: Date.now(), start: date, end: date, label: label || "개인 일정" });
+  state.offs.sort((a,b) => a.start.localeCompare(b.start));
+  save(); renderAll();
+  document.getElementById("singleLabel").value = "";
+}
+function addRange() {
+  const s = document.getElementById("rangeStart").value;
+  const e = document.getElementById("rangeEnd").value || s;
+  if (!s) return alert("시작일을 선택해 주세요.");
+  if (e < s) return alert("종료일이 시작일보다 빠릅니다.");
+  const label = document.getElementById("rangeLabel").value.trim();
+  state.offs.push({ id: Date.now(), start: s, end: e, label: label || "기간 휴가" });
+  state.offs.sort((a,b) => a.start.localeCompare(b.start));
+  save(); renderAll();
+  document.getElementById("rangeLabel").value = "";
+}
+function removeOff(id) {
+  state.offs = state.offs.filter(o => o.id !== id);
+  save(); renderAll();
+}
+
+function renderOffs() {
+  const el = document.getElementById("offList");
+  if (!state.offs.length) { el.innerHTML = `<div class="empty">등록된 개인 일정이 없습니다.</div>`; return; }
+  el.innerHTML = state.offs.map(o => {
+    const range = o.start === o.end ? o.start : `${o.start} ~ ${o.end}`;
+    return `<div class="item">
+      <div>${o.label}<small>${range}</small></div>
+      <button class="del" onclick="removeOff(${o.id})">삭제</button>
+    </div>`;
+  }).join("");
+}
+
+function addHoliday() {
+  const date = document.getElementById("holDate").value;
+  if (!date) return alert("날짜를 선택해 주세요.");
+  const name = document.getElementById("holName").value.trim();
+  if (state.holidays.some(h => h.date === date)) return alert("이미 등록된 날짜입니다.");
+  state.holidays.push({ date, name });
+  state.holidays.sort((a,b) => a.date.localeCompare(b.date));
+  save(); renderAll();
+  document.getElementById("holName").value = "";
+}
+function removeHoliday(date) {
+  state.holidays = state.holidays.filter(h => h.date !== date);
+  save(); renderAll();
+}
+function renderHolidays() {
+  const el = document.getElementById("holList");
+  if (!state.holidays.length) { el.innerHTML = `<div class="empty">등록된 공휴일이 없습니다.</div>`; return; }
+  el.innerHTML = state.holidays.map(h => `<div class="item">
+      <div>${h.name || "공휴일"}<small>${h.date}</small></div>
+      <button class="del" onclick="removeHoliday('${h.date}')">삭제</button>
+    </div>`).join("");
+}
+
+function renderPreview() {
+  const el = document.getElementById("preview");
+  const today = new Date(); today.setHours(0,0,0,0);
+  let html = "";
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today); d.setDate(today.getDate() + i);
+    const s = toStr(d);
+    const r = judge(s);
+    const label = `${d.getMonth()+1}/${d.getDate()} (${DAY_KO[DAYS[d.getDay()]]})`;
+    if (r.ring) {
+      html += `<div class="pv"><span>${label}</span><span class="ring">${r.time} 울림</span></div>`;
+    } else {
+      html += `<div class="pv"><span>${label}</span><span class="skip">${r.reason}</span></div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function renderAll() {
+  renderWeek(); renderOffs(); renderHolidays(); renderPreview();
+}
+
+renderAll();
+setMode("single");
+</script>
+</body>
+</html>
